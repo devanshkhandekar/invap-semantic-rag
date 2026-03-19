@@ -1,6 +1,6 @@
-# Semantic RAG Foundation — Milestone 1
+# Semantic RAG Foundation
 
-This repository contains the initial local foundation setup for the semantic document search system.
+This repository contains the initial local foundation setup for the semantic document search system for INVAP.
 
 ## Included in this milestone
 
