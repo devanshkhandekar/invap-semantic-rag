@@ -9,6 +9,22 @@ engine = create_engine(
 )
 
 
+def get_db_connection():
+    """
+    Returns a raw DBAPI connection from SQLAlchemy engine.
+    Useful for bulk inserts via psycopg2.extras.execute_values.
+    """
+    return engine.raw_connection()
+
+
+def execute_query(query: str, params: dict | None = None):
+    """
+    Executes a SQL query using SQLAlchemy connection.
+    """
+    with engine.begin() as connection:
+        return connection.execute(text(query), params or {})
+
+
 def check_database_connection() -> dict:
     """
     Verifies that PostgreSQL is reachable and pgvector extension exists.
