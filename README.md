@@ -41,7 +41,6 @@ This milestone includes:
 ## Project Structure
 
 ```text
-.
 ├── app
 │   ├── api
 │   │   ├── health.py
@@ -74,7 +73,7 @@ This milestone includes:
 ├── Dockerfile
 └── README.md
 
-
+```
 ## How document access works
 
 This milestone uses **project-based access control**.
