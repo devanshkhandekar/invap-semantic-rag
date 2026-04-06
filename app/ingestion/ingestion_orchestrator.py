@@ -17,7 +17,7 @@ class IngestionOrchestrator:
         )
         self.embedder = EmbeddingService(settings.EMBEDDING_MODEL_NAME)
 
-    def ingest_directory(self, directory_path: str) -> dict:
+    def ingest_directory(self, directory_path: str, project_id: int | None = None) -> dict:
         directory = Path(directory_path)
         pdf_files = sorted(directory.glob("*.pdf"))
 
@@ -26,7 +26,7 @@ class IngestionOrchestrator:
         total_chunks = 0
 
         for pdf_file in pdf_files:
-            result = self.ingest_pdf(str(pdf_file))
+            result = self.ingest_pdf(str(pdf_file), project_id=project_id)
             results.append(result)
             total_pages += result["page_count"]
             total_chunks += result["chunk_count"]
@@ -37,17 +37,23 @@ class IngestionOrchestrator:
             "total_chunks_created": total_chunks,
             "embedding_model": self.embedder.model_name,
             "embedding_dimension": self.embedder.embedding_dimension,
+            "project_id": project_id,
             "documents": results,
         }
 
-    def ingest_pdf(self, pdf_path: str) -> dict:
+    def ingest_pdf(self, pdf_path: str, project_id: int | None = None) -> dict:
         pdf_data = self.extractor.extract(pdf_path)
-        chunks = self.chunker.chunk_pages(pdf_data["pages"])
 
+        chunks = self.chunker.chunk_pages(pdf_data["pages"])
         texts = [chunk["chunk_text"] for chunk in chunks]
         embeddings = self.embedder.embed_texts(texts) if texts else []
 
-        document_id = self._insert_document(pdf_data, ingest_status="processing")
+        document_id = self._insert_document(
+            pdf_data,
+            ingest_status="processing",
+            project_id=project_id,
+        )
+
         inserted_chunk_count = self._insert_chunks(document_id, chunks, embeddings)
         self._update_document_status(document_id, "completed")
 
@@ -60,18 +66,26 @@ class IngestionOrchestrator:
             "inserted_chunk_count": inserted_chunk_count,
             "embedding_dimension": self.embedder.embedding_dimension,
             "embedding_model": self.embedder.model_name,
+            "project_id": project_id,
         }
 
-    def _insert_document(self, pdf_data: dict, ingest_status: str) -> int:
-        query = """
-            INSERT INTO documents (filename, source_path, language, page_count, ingest_status)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id;
-        """
-
+    def _insert_document(self, pdf_data: dict, ingest_status: str, project_id: int | None = None) -> int:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
+                if project_id is not None:
+                    cur.execute("SELECT 1 FROM projects WHERE id = %s", (project_id,))
+                    if cur.fetchone() is None:
+                        raise ValueError(f"Invalid project_id: {project_id}")
+
+                query = """
+                INSERT INTO documents
+                    (filename, source_path, language, page_count, ingest_status, project_id)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s)
+                RETURNING id;
+                """
+
                 cur.execute(
                     query,
                     (
@@ -80,8 +94,10 @@ class IngestionOrchestrator:
                         pdf_data["language"],
                         pdf_data["page_count"],
                         ingest_status,
+                        project_id,
                     ),
                 )
+
                 row = cur.fetchone()
                 document_id = row[0] if isinstance(row, tuple) else row["id"]
                 conn.commit()
@@ -89,12 +105,7 @@ class IngestionOrchestrator:
         finally:
             conn.close()
 
-    def _insert_chunks(
-        self,
-        document_id: int,
-        chunks: list[dict],
-        embeddings: list[list[float]],
-    ) -> int:
+    def _insert_chunks(self, document_id: int, chunks: list[dict], embeddings: list[list[float]]) -> int:
         if not chunks:
             return 0
 
@@ -111,8 +122,9 @@ class IngestionOrchestrator:
             )
 
         query = """
-            INSERT INTO document_chunks (document_id, chunk_index, page_number, chunk_text, embedding)
-            VALUES %s
+        INSERT INTO document_chunks
+            (document_id, chunk_index, page_number, chunk_text, embedding)
+        VALUES %s
         """
 
         conn = get_db_connection()
@@ -125,17 +137,16 @@ class IngestionOrchestrator:
                     template="(%s, %s, %s, %s, %s::vector)",
                 )
                 conn.commit()
-            return len(rows)
+                return len(rows)
         finally:
             conn.close()
 
     def _update_document_status(self, document_id: int, status: str) -> None:
         query = """
-            UPDATE documents
-            SET ingest_status = %s
-            WHERE id = %s
+        UPDATE documents
+        SET ingest_status = %s
+        WHERE id = %s
         """
-
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
