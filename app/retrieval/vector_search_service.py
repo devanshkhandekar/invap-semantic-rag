@@ -2,6 +2,7 @@ from sqlalchemy import text
 from app.core.database import engine
 from app.retrieval.query_embedding_service import embed_query
 from app.retrieval.access_control_service import get_allowed_project_ids
+from app.retrieval.postprocess_service import dedupe_results
 
 
 def to_pgvector_literal(values: list[float]) -> str:
@@ -10,7 +11,7 @@ def to_pgvector_literal(values: list[float]) -> str:
 
 def search_chunks(user_id: str, query: str, top_k: int = 5) -> list[dict]:
     allowed_project_ids = get_allowed_project_ids(user_id)
-
+    candidate_k = max(top_k * 3, 10)
     if not allowed_project_ids:
         return []
 
@@ -31,7 +32,7 @@ def search_chunks(user_id: str, query: str, top_k: int = 5) -> list[dict]:
           ON d.id = c.document_id
         WHERE d.project_id = ANY(CAST(:allowed_project_ids AS bigint[]))
         ORDER BY c.embedding <=> CAST(:query_vector AS vector)
-        LIMIT :top_k
+        LIMIT :candidate_k
     """)
 
     with engine.begin() as connection:
@@ -41,10 +42,11 @@ def search_chunks(user_id: str, query: str, top_k: int = 5) -> list[dict]:
                 "query_vector": query_vector,
                 "allowed_project_ids": allowed_project_ids,
                 "top_k": top_k,
+                "candidate_k": candidate_k,
             },
         ).fetchall()
 
-    return [
+    raw_results = [
         {
             "document_id": row[0],
             "document_name": row[1],
@@ -56,3 +58,5 @@ def search_chunks(user_id: str, query: str, top_k: int = 5) -> list[dict]:
         }
         for row in rows
     ]
+
+    return dedupe_results(raw_results, final_top_k=top_k)

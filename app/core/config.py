@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings:
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "rag_user")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "rag_password")
@@ -18,10 +17,16 @@ class Settings:
         "EMBEDDING_MODEL_NAME",
         "sentence-transformers/all-MiniLM-L6-v2"
     )
-    #os.environ["SAMPLE_DATA_DIR"] = "sample_data"
+
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "800"))
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "120"))
     SAMPLE_DATA_DIR: str = os.getenv("SAMPLE_DATA_DIR", "/app/sample_data")
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/uploads")
+
+    # Optional future scaffold
+    LLM_ENABLED: bool = os.getenv("LLM_ENABLED", "false").lower() == "true"
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "none")
+    LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "")
 
     @property
     def sqlalchemy_database_uri(self) -> str:
@@ -40,6 +45,5 @@ class Settings:
             "user": self.POSTGRES_USER,
             "password": self.POSTGRES_PASSWORD,
         }
-
 
 settings = Settings()

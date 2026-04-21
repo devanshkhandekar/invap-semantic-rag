@@ -39,10 +39,27 @@ services:
       CHUNK_SIZE: ${CHUNK_SIZE}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP}
       SAMPLE_DATA_DIR: ${SAMPLE_DATA_DIR}
+      UPLOAD_DIR: /app/uploads
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./sample_data:/app/sample_data
+      - ./uploads:/app/uploads
+      - ./.env:/app/.env
+
+  ui:
+    build: .
+    container_name: semantic_rag_ui
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_BASE_URL: http://api:8000
+    command: streamlit run /app/ui/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./ui:/app/ui
       - ./.env:/app/.env

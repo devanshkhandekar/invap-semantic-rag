@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only torch first
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu && \
@@ -22,8 +21,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY app ./app
 COPY scripts ./scripts
 COPY sample_data ./sample_data
+COPY ui ./ui
 COPY .env ./.env
 
+RUN mkdir -p /app/uploads
+
 EXPOSE 8000
+EXPOSE 8501
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
